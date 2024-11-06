@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { faker } from "@faker-js/faker";
 
 function createRandomPost() {
@@ -25,9 +25,12 @@ function App() {
         )
       : posts;
 
-  function handleAddPost(post) {
+  const handleAddPost = useCallback(function handleAddPost(post) {
+    // Here the useCallback hook will not immediately call the above handleAddPost() function but this will simply
+    // memoize this function. useMemo() hook will store the result as a value after calling the callback function but in this
+    // useCallback() hook only the function itself is memoized now.
     setPosts((posts) => [post, ...posts]);
-  }
+  }, []);
 
   function handleClearPosts() {
     setPosts([]);
@@ -41,10 +44,25 @@ function App() {
     [isFakeDark]
   );
 
-  const archiveOptions = {
-    show: false,
-    title: "Post archive in addition to main posts",
-  };
+  // The below archiveOptions object is recreated over and over again each time the app component re-renders And so basically
+  // the prop the below Archive component receives is recreated over and over again each time the app component re-renders because
+  // the archiveOptions object prop is treated as different everytime when the app component re-renders because in react
+  // two objects are always treated as differently everytime when the app component re-renders event both objects that we
+  // have passed into the Archive component are treated as different everytime when the app component re-renders. To solve this
+  // issue as to make this archiveOptions object stable and here where the useMemo() hook comes in play.
+  const archiveOptions = useMemo(() => {
+    // This callback function will only run on the initial render and the result will be stored in the cache which is nothing
+    // but a memory where the React will remember across re-renders.
+    return {
+      show: false,
+      title: `Post archive in addition to ${posts.length} main posts`,
+    };
+  }, [posts.length]); // This useMemo() hook will return an object but there could be some intensive calculation going on which is the reason
+  // useMemo() hook will take in a function but not just a value. Again whatever we return from the useMemo() hook will be
+  // stored in the cache which is nothing but a memory where the React will remember across re-renders. To this useMemo() hook
+  // we will pass a dependency array where based on this it will decide when to recalculate the value again. By specifying an
+  // empty dependency array here which means this value will only be computed in the beginning and then it will never change,
+  // and it will never be recomputed again.
 
   return (
     <section>
@@ -62,7 +80,11 @@ function App() {
         setSearchQuery={setSearchQuery}
       />
       <Main posts={searchedPosts} onAddPost={handleAddPost} />
-      <Archive archiveOptions={archiveOptions} />
+      <Archive
+        archiveOptions={archiveOptions}
+        onAddPost={handleAddPost}
+        setIsFakeDark={setIsFakeDark}
+      />
       <Footer />
     </section>
   );
@@ -166,7 +188,7 @@ function List({ posts }) {
 // original component Archive. And please remember this Archive component is a great candidate for memoization because this
 // Archive component is very heavy as it re-renders very often and it does so with the same props and the only prop that this
 // Archive component has the show prop which is always false.
-const Archive = memo(function Archive({ archiveOptions }) {
+const Archive = memo(function Archive({ archiveOptions, onAddPost }) {
   // Here we don't need the setter function. We're only using state to store these posts because the callback function passed into useState (which generates the posts) is only called once, on the initial render. So we use this trick as an optimization technique, because if we just used a regular variable, these posts would be re-created on every render. We could also move the posts outside the components, but I wanted to show you this trick 😉
   const [posts] = useState(
     () =>
@@ -192,7 +214,7 @@ const Archive = memo(function Archive({ archiveOptions }) {
               <p>
                 <strong>{post.title}:</strong> {post.body}
               </p>
-              {/* <button onClick={() => onAddPost(post)}>Add as new post</button> */}
+              <button onClick={() => onAddPost(post)}>Add as new post</button>
             </li>
           ))}
         </ul>
